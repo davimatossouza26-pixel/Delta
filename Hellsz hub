@@ -1,0 +1,225 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
+local CoreGui = game:GetService("CoreGui")
+
+local player = Players.LocalPlayer
+
+-- Limpar painel anterior
+local old = CoreGui:FindFirstChild("HellszPanel")
+if old then old:Destroy() end
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "HellszPanel"
+gui.ResetOnSpawn = false
+gui.Parent = CoreGui
+
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(220, 280)
+main.Position = UDim2.new(0.5, -110, 0.5, -140)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+main.Parent = gui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -70, 0, 35)
+title.Position = UDim2.fromOffset(10, 0)
+title.BackgroundTransparency = 1
+title.Text = "HellszPanel"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 15
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = main
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(30, 30)
+close.Position = UDim2.new(1, -35, 0, 3)
+close.Text = "X"
+close.Parent = main
+
+local minimize = Instance.new("TextButton")
+minimize.Size = UDim2.fromOffset(30, 30)
+minimize.Position = UDim2.new(1, -68, 0, 3)
+minimize.Text = "-"
+minimize.Parent = main
+
+local content = Instance.new("ScrollingFrame")
+content.Position = UDim2.fromOffset(10, 40)
+content.Size = UDim2.new(1, -20, 1, -50)
+content.BackgroundTransparency = 1
+content.BorderSizePixel = 0
+content.ScrollBarThickness = 3
+content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+content.CanvasSize = UDim2.new()
+content.Parent = main
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.Parent = content
+
+close.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end)
+
+local minimized = false
+minimize.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    content.Visible = not minimized
+    main.Size = minimized
+        and UDim2.fromOffset(220, 38)
+        or UDim2.fromOffset(220, 280)
+end)
+
+-- FPS
+local fpsLabel = Instance.new("TextLabel")
+fpsLabel.Size = UDim2.fromOffset(90, 24)
+fpsLabel.Position = UDim2.new(1, -100, 0, 10)
+fpsLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+fpsLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+fpsLabel.Text = "FPS: 0"
+fpsLabel.Parent = gui
+
+local frames, elapsed = 0, 0
+RunService.RenderStepped:Connect(function(dt)
+    frames += 1
+    elapsed += dt
+    if elapsed >= 1 then
+        fpsLabel.Text = "FPS: " .. frames
+        frames, elapsed = 0, 0
+    end
+end)
+
+-- Chat
+local function sendChat(message)
+    pcall(function()
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+            if channel then channel:SendAsync(message) end
+        else
+            local events = game:GetService("ReplicatedStorage")
+                :FindFirstChild("DefaultChatSystemChatEvents")
+            if events then
+                local request = events:FindFirstChild("SayMessageRequest")
+                if request then request:FireServer(message, "All") end
+            end
+        end
+    end)
+end
+
+-- Botões
+local function createButton(name, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, 0, 0, 32)
+    button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.Font = Enum.Font.Gotham
+    button.TextSize = 13
+    button.Text = name
+    button.Parent = content
+    button.MouseButton1Click:Connect(callback)
+    return button
+end
+
+createButton("/Render", function()
+    sendChat("/Render")
+end)
+
+-- ESP de nomes
+local espEnabled = false
+local espObjects = {}
+
+local function removeESP()
+    for _, billboard in pairs(espObjects) do
+        if billboard then billboard:Destroy() end
+    end
+    table.clear(espObjects)
+end
+
+local function addESP(target)
+    if target == player then return end
+
+    local character = target.Character
+    local head = character and character:FindFirstChild("Head")
+    if not head or espObjects[target] then return end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "HellszESP"
+    billboard.Size = UDim2.fromOffset(150, 35)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Adornee = head
+    billboard.Parent = gui
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.fromScale(1, 1)
+    label.BackgroundTransparency = 1
+    label.Text = target.DisplayName
+    label.TextColor3 = Color3.fromRGB(255, 80, 80)
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 13
+    label.Parent = billboard
+
+    espObjects[target] = billboard
+end
+
+local espButton
+espButton = createButton("ESP: OFF", function()
+    espEnabled = not espEnabled
+    espButton.Text = espEnabled and "ESP: ON" or "ESP: OFF"
+
+    if espEnabled then
+        for _, target in ipairs(Players:GetPlayers()) do
+            addESP(target)
+        end
+    else
+        removeESP()
+    end
+end)
+
+Players.PlayerAdded:Connect(function(target)
+    target.CharacterAdded:Connect(function()
+        if espEnabled then
+            task.wait(1)
+            addESP(target)
+        end
+    end)
+end)
+
+for _, target in ipairs(Players:GetPlayers()) do
+    target.CharacterAdded:Connect(function()
+        if espEnabled then
+            task.wait(1)
+            addESP(target)
+        end
+    end)
+end
+
+-- Atualizar ESP para respawns
+task.spawn(function()
+    while gui.Parent do
+        if espEnabled then
+            for _, target in ipairs(Players:GetPlayers()) do
+                if target ~= player then
+                    local billboard = espObjects[target]
+                    if not billboard or not billboard.Parent then
+                        espObjects[target] = nil
+                        addESP(target)
+                    end
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(target)
+    if espObjects[target] then
+        espObjects[target]:Destroy()
+        espObjects[target] = nil
+    end
+end)
